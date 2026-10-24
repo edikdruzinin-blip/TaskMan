@@ -1,0 +1,142 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Signing values come from repository secrets (README, section "Подпись APK").
+      # Empty values are ignored by Gradle.
+      TASKMAN_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      TASKMAN_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      TASKMAN_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      # the executable bit is lost when files are uploaded from a phone / the web UI
+      - name: Make scripts executable
+        run: chmod +x gradlew dev/*.sh
+
+      - name: Prepare signing key
+        id: signing
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            # Fail loudly instead of silently falling back to a debug key when the secrets are incomplete.
+            missing=""
+            [ -n "$TASKMAN_STORE_PASSWORD" ] || missing="$missing KEYSTORE_PASSWORD"
+            [ -n "$TASKMAN_KEY_ALIAS" ] || missing="$missing KEY_ALIAS"
+            if [ -n "$missing" ]; then
+              echo "::error title=Incomplete signing secrets::KEYSTORE_BASE64 is set, but these secrets are missing or empty:$missing"
+              exit 1
+            fi
+            if ! echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/taskman.jks" 2>/dev/null; then
+              echo "::error title=Bad KEYSTORE_BASE64::The secret is not valid base64. Copy the whole line printed by dev/make-keystore.sh."
+              exit 1
+            fi
+            if ! keytool -list -keystore "$RUNNER_TEMP/taskman.jks" -storepass "$TASKMAN_STORE_PASSWORD" -alias "$TASKMAN_KEY_ALIAS" > /dev/null 2>&1; then
+              echo "::error title=Signing key not readable::Wrong KEYSTORE_PASSWORD or KEY_ALIAS for the keystore in KEYSTORE_BASE64."
+              exit 1
+            fi
+            echo "TASKMAN_KEYSTORE=$RUNNER_TEMP/taskman.jks" >> "$GITHUB_ENV"
+            echo "mode=private" >> "$GITHUB_OUTPUT"
+            echo "Signing with the private key from the repository secrets."
+          else
+            echo "mode=temporary" >> "$GITHUB_OUTPUT"
+          fi
+
+      # No secrets: use a temporary key that is generated once and kept in the Actions cache, so that
+      # every build is signed with the SAME key and a new build installs over the previous one.
+      # (The cache is dropped after 7 days without a build; then a new key is created.)
+      - name: Restore the temporary key
+        if: steps.signing.outputs.mode == 'temporary'
+        uses: actions/cache@v5
+        with:
+          path: ~/taskman-temp-key
+          key: taskman-temp-key-v1
+
+      - name: Use the temporary key
+        if: steps.signing.outputs.mode == 'temporary'
+        shell: bash
+        run: |
+          dir="$HOME/taskman-temp-key"
+          if [ ! -f "$dir/taskman.jks" ]; then
+            mkdir -p "$dir"
+            pass=$(openssl rand -hex 16)
+            keytool -genkeypair -keystore "$dir/taskman.jks" -storetype PKCS12 \
+              -storepass "$pass" -keypass "$pass" -alias taskman \
+              -keyalg RSA -keysize 3072 -sigalg SHA256withRSA -validity 36500 \
+              -dname "CN=TaskMan temporary key" > /dev/null 2>&1
+            echo "$pass" > "$dir/password.txt"
+            chmod 600 "$dir/password.txt"
+            echo "::warning title=New temporary signing key::A new temporary key was created, so this APK cannot be installed over a build made with an older key: uninstall the old app first. Later builds reuse this key. For a permanent key see README, section Signing."
+          else
+            echo "Reusing the temporary key from the cache."
+          fi
+          pass=$(cat "$dir/password.txt")
+          # keystore.properties is git-ignored and lives only in this runner's workspace (nothing is printed)
+          {
+            echo "storeFile=$dir/taskman.jks"
+            echo "storePassword=$pass"
+            echo "keyAlias=taskman"
+            echo "keyPassword=$pass"
+          } > keystore.properties
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: TaskMan-debug
+          path: app/build/outputs/apk/debug/*.apk
+
+      # Smaller and faster, built separately so that a shrinker problem cannot hide the debug APK.
+      # No continue-on-error: a broken release must turn the run red (the debug artifact is already uploaded).
+      - name: Build release APK
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: TaskMan-release
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: ignore
+
+      # Fails the run if an APK is unsigned or its signature is broken; prints what apksigner reports
+      # (look for the certificate fingerprint: it must be identical between builds for updates to install).
+      - name: Verify APK signatures
+        if: always()
+        shell: bash
+        env:
+          SIGNING_MODE: ${{ steps.signing.outputs.mode }}
+        run: |
+          set +e
+          ./dev/verify-apk.sh > verify.txt 2>&1
+          status=$?
+          cat verify.txt
+          {
+            echo '### APK signatures'
+            echo "Signing key: $SIGNING_MODE (private = your key from secrets, temporary = generated once and cached)"
+            echo '```'
+            cat verify.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
