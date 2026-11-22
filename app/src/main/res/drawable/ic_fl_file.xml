@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fluent-style line icon (1.5 dp stroke). Tint it from Compose. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M7,3.5 H13.2 L19,9.3 V19.5 A1.5,1.5 0 0,1 17.5,21 H7 A1.5,1.5 0 0,1 5.5,19.5 V5 A1.5,1.5 0 0,1 7,3.5 Z M13,3.8 V9.5 H18.7"
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

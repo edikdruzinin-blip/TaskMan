@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fluent-style line icon (1.5 dp stroke). Tint it from Compose. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M13.79,4.82 L13.5,2.52 L10.5,2.52 L10.21,4.82 A7.4,7.4 0 0,0 8.19,5.66 L6.36,4.23 L4.23,6.36 L5.66,8.19 A7.4,7.4 0 0,0 4.82,10.21 L2.52,10.5 L2.52,13.5 L4.82,13.79 A7.4,7.4 0 0,0 5.66,15.81 L4.23,17.64 L6.36,19.77 L8.19,18.34 A7.4,7.4 0 0,0 10.21,19.18 L10.5,21.48 L13.5,21.48 L13.79,19.18 A7.4,7.4 0 0,0 15.81,18.34 L17.64,19.77 L19.77,17.64 L18.34,15.81 A7.4,7.4 0 0,0 19.18,13.79 L21.48,13.5 L21.48,10.5 L19.18,10.21 A7.4,7.4 0 0,0 18.34,8.19 L19.77,6.36 L17.64,4.23 L15.81,5.66 A7.4,7.4 0 0,0 13.79,4.82 Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M9.1,12 a2.9,2.9 0 1,0 5.8,0 a2.9,2.9 0 1,0 -5.8,0"
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
